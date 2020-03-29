@@ -17,6 +17,9 @@ import android.os.Bundle;
 import android.provider.Settings;
 import android.widget.Toast;
 
+import com.firebase.geofire.GeoFire;
+import com.firebase.geofire.GeoLocation;
+import com.firebase.geofire.LocationCallback;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.location.LocationRequest;
@@ -27,6 +30,10 @@ import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.firebase.FirebaseError;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
 import com.karumi.dexter.Dexter;
 import com.karumi.dexter.DexterActivity;
 import com.karumi.dexter.PermissionToken;
@@ -50,11 +57,16 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private long Fastest_Interval = 5000;
     private LatLng latLng;
     private boolean ispermission;
+    DatabaseReference ref;
+    GeoFire geoFire;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_maps);
+
+        ref = FirebaseDatabase.getInstance().getReference("geofire");
+         geoFire = new GeoFire(ref);
 
         if (requestSinglePermission()) {
 
@@ -73,16 +85,41 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
         }
 
+        //saveLocation();
+        retriveLocation();
+
 
     }
+
+    private void retriveLocation() {
+        geoFire.getLocation("firebase-hq", new LocationCallback() {
+            @Override
+            public void onLocationResult(String key, GeoLocation location) {
+                if (location != null) {
+                    System.out.println(String.format("The location for key %s is [%f,%f]", key, location.latitude, location.longitude));
+
+                } else {
+                    System.out.println(String.format("There is no location for key %s in GeoFire", key));
+                }
+            }
+
+            @Override
+            public void onCancelled(DatabaseError databaseError) {
+                System.err.println("There was an error getting the GeoFire location: " + databaseError);
+            }
+        });
+    }
+
+
+
+
+
 
     private boolean checkLocation() {
         if (!isLocationEnabled()) {
             showAlert();
         }
         return isLocationEnabled();
-
-
     }
 
     private void showAlert() {
@@ -212,7 +249,20 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         SupportMapFragment MapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
         MapFragment.getMapAsync(this);
 
+        geoFire.setLocation("firebase-hq", new GeoLocation(location.getLatitude() , location.getLongitude()) , new GeoFire.CompletionListener() {
+            @Override
+            public void onComplete(String key, DatabaseError error) {
+                if (error != null) {
+                    System.err.println("There was an error saving the location to GeoFire: " + error);
+                } else {
+                    System.out.println("Location saved on server successfully!");
+                }
+            }
+        });
+
     }
+
+
 
     @Override
     protected void onStart() {
@@ -232,4 +282,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             googleApiClient.disconnect();
         }
     }
+
+
 }
